@@ -154,6 +154,15 @@ footer{padding:40px 5vw;text-align:center;color:var(--mut);position:relative;z-i
 @keyframes fall{to{transform:translateY(110vh) rotate(720deg)}}
 .reveal{opacity:0;transform:translateY(30px);transition:.7s}
 .reveal.in{opacity:1;transform:none}
+.bchip{display:inline-grid;place-items:center;min-width:30px;height:30px;padding:0 6px;border-radius:999px;background:var(--inp);border:1px solid var(--cardb);font-weight:800;font-size:.78rem;margin:2px}
+.bchip.w{background:#e5192d;color:#fff;border-color:#e5192d}.bchip.f{background:#2d7dff;color:#fff;border-color:#2d7dff}.bchip.s{background:#12a04a;color:#fff;border-color:#12a04a}.bchip.x{background:#ffc61a;color:#2a1a00;border-color:#ffc61a}
+.runs{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin:10px 0}
+.runs button{padding:14px 0;font-size:1.15rem;font-weight:800;border-radius:12px;border:1px solid var(--cardb);background:var(--card);color:var(--tx);cursor:pointer;font-family:'Poppins'}
+.runs button:hover:not(:disabled){background:var(--g);color:#fff}
+.runs button:disabled{opacity:.35;cursor:not-allowed}
+.bigscore{font-family:'Bungee';font-size:2.6rem;color:var(--gold);line-height:1}
+.sel3{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.sct{font-size:.8rem}.sct td,.sct th{padding:6px 8px}
 @media(max-width:820px){.hero-grid{grid-template-columns:1fr}.two,.pl{grid-template-columns:1fr}.links a{padding:6px 8px;font-size:.75rem}}
 </style>
 </head>
@@ -326,7 +335,9 @@ const CONFIG = {
   FIREBASE_DB_URL: '',             // optional: e.g. 'https://your-project-default-rtdb.firebaseio.com' -> shared data across all devices
   VENUE: 'Goal & Googly Turf, Royal City, Alasanatham Road, Near ISKCON Temple, Hosur',
   CONTACTS: '99869 62344 | 99949 46766 | 98407 27393',
-  EVENT_START: '2026-10-17T09:00:00+05:30'
+  EVENT_START: '2026-10-17T09:00:00+05:30',
+  DEFAULT_OVERS: 6,
+  ALL_OUT_WICKETS: 7               // 8 players: innings ends when 7 wickets fall. Set 8 if the last batter may bat alone.
 };
 /* ================================================================ */
 
@@ -534,7 +545,7 @@ function matchCard(m,admin){
     ctl=`<div style="margin-top:8px;display:grid;gap:6px">
     <div class="acts"><button class="btn sm ${m.winner===m.a?'':'ghost'}" ${m.a?'':'disabled'} onclick="setWinner('${m.id}','${m.a}')">✅ ${ta?esc(ta.name):'A'} won</button><button class="btn sm ${m.winner===m.b?'':'ghost'}" ${m.b?'':'disabled'} onclick="setWinner('${m.id}','${m.b}')">✅ ${tb?esc(tb.name):'B'} won</button></div>
     <div class="acts"><input class="mini" placeholder="Score A" value="${esc(m.sa)}" onchange="setField('${m.id}','sa',this.value)"><input class="mini" placeholder="Score B" value="${esc(m.sb)}" onchange="setField('${m.id}','sb',this.value)"><input style="width:110px" placeholder="Time" value="${esc(m.time)}" onchange="setField('${m.id}','time',this.value)"></div></div>`; }
-  return `<div class="match"><div class="mh"><span>Match ${m.no}${m.third?' • 3rd place':''}${m.bye?' • Bye':''}</span><span>${m.time?'⏰ '+esc(m.time):''}</span></div>${slot(m,m.a,'a')}${slot(m,m.b,'b')}${ctl}</div>`;
+  return `<div class="match"><div class="mh"><span>Match ${m.no}${m.third?' • 3rd place':''}${m.bye?' • Bye':''}</span><span>${m.time?'⏰ '+esc(m.time):''}</span></div>${slot(m,m.a,'a')}${slot(m,m.b,'b')}${ctl}${scoreBtns(m,admin)}</div>`;
 }
 function fixturesHTML(admin){
   if(!S.matches.length) return `<div class="empty">⏳ Fixtures will appear here once registrations close and the admin generates the draw.</div>`;
@@ -641,6 +652,184 @@ function renderWA(){
 }
 function waGen(){ const id=$('#waT').value; $('#waOut').value = id==='__group' ? groupFix() : (T(id)?waText(T(id),$('#waM').value):'Add a team first.'); }
 function waOpen(){ const id=$('#waT').value; const t=T(id); let ph=t?(t.phone||'').replace(/\D/g,''):''; if(ph.length===10) ph='91'+ph; window.open(`https://wa.me/${ph}?text=${encodeURIComponent($('#waOut').value)}`,'_blank'); }
+
+/* =====================  SCORECARD / BALL-BY-BALL SCORING  ===================== */
+let SC = {mid:null, ex:'', w:false};
+const ovS = l => Math.floor(l/6) + '.' + (l%6);
+const WK = () => CONFIG.ALL_OUT_WICKETS || 7;
+const getM = () => S.matches.find(x => x.id === SC.mid);
+const lastInn = m => m.sc.inn[m.sc.inn.length-1];
+function plist(tid){ const t=T(tid); const p=((t&&t.players)||[]).filter(Boolean); return p.length ? p : Array.from({length:8},(_,i)=>'Player '+(i+1)); }
+function scoreBtns(m,admin){
+  if(m.bye||!m.a||!m.b) return '';
+  const has = m.sc && (m.sc.inn||[]).length;
+  if(!admin && !has) return '';
+  return `<div class="acts" style="margin-top:8px">${admin?`<button class="btn gold sm" onclick="openScorer('${m.id}')">🏏 ${has?'Continue scoring':'Score match'}</button>`:''}${has?`<button class="btn ghost sm" onclick="openScorecard('${m.id}')">📊 Scorecard</button>`:''}</div>`;
+}
+function ballLabel(x){
+  const r=x.r||0;
+  if(x.w) return {t:'W'+(r?'+'+r:''),c:'w'};
+  if(x.ex==='wd') return {t:'Wd'+(r?'+'+r:''),c:'x'};
+  if(x.ex==='nb') return {t:'Nb'+(r?'+'+r:''),c:'x'};
+  if(x.ex==='b') return {t:'B'+r,c:'x'};
+  return {t:String(r),c:r===4?'f':r===6?'s':''};
+}
+function calcInn(inn){
+  const o={runs:0,wk:0,legal:0,ext:{wd:0,nb:0,b:0},bat:{},batOrder:[],bowl:{},bowlOrder:[],fow:[],overs:[],free:false};
+  (inn.balls||[]).forEach(x=>{
+    const wd=x.ex==='wd', nb=x.ex==='nb', by=x.ex==='b', r=x.r||0, legal=!(wd||nb);
+    let tot=r;
+    if(wd){tot=1+r;o.ext.wd+=tot;} else if(nb){tot=1+r;o.ext.nb+=1;} else if(by){o.ext.b+=r;}
+    o.runs+=tot;
+    const before=o.legal; if(legal) o.legal++;
+    [x.s,x.ns].forEach(nm=>{ if(nm&&!o.bat[nm]){ o.bat[nm]={n:nm,r:0,b:0,f:0,s:0,out:''}; o.batOrder.push(nm);} });
+    const bt=o.bat[x.s];
+    if(bt&&!wd){ bt.b++; if(!by){ bt.r+=r; if(r===4)bt.f++; if(r===6)bt.s++; } }
+    if(x.b){ let bw=o.bowl[x.b]; if(!bw){ bw=o.bowl[x.b]={n:x.b,legal:0,r:0,w:0,wd:0,nb:0}; o.bowlOrder.push(x.b);} if(!by) bw.r+=tot; if(wd) bw.wd+=tot; if(nb) bw.nb++; if(legal) bw.legal++; if(x.w&&x.wt!=='run out') bw.w++; }
+    const oi=Math.floor(before/6); const ov=o.overs[oi]||(o.overs[oi]={b:x.b,balls:[],runs:0}); ov.balls.push(ballLabel(x)); ov.runs+=tot;
+    if(x.w){ o.wk++; const out=x.out||x.s;
+      const how=x.wt==='bowled'?'b '+x.b:x.wt==='caught'?'caught, b '+x.b:x.wt==='stumped'?'st b '+x.b:x.wt==='hit wicket'?'hit wkt b '+x.b:'run out';
+      if(o.bat[out]) o.bat[out].out=how; o.fow.push(o.runs+'/'+o.wk+' ('+out+', '+ovS(o.legal)+' ov)'); }
+    o.free=nb;
+  });
+  return o;
+}
+function inningsDone(m,i,cs){ const inn=m.sc.inn[i], o=cs[i]; return !!inn.ended || o.legal>=m.sc.overs*6 || o.wk>=WK() || (i===1 && cs[0] && o.runs>cs[0].runs); }
+function nextCur(ball,legalAfter){
+  let s=ball.s, ns=ball.ns, b=ball.b;
+  if((ball.r||0)%2===1){ [s,ns]=[ns,s]; }
+  if(ball.w){ const out=ball.out||ball.s; if(s===out) s=''; else if(ns===out) ns=''; }
+  if(!(ball.ex==='wd'||ball.ex==='nb') && legalAfter%6===0){ [s,ns]=[ns,s]; b=''; }
+  return {s,ns,b};
+}
+function syncScores(m){
+  const cs=m.sc.inn.map(calcInn); m.sa=''; m.sb='';
+  m.sc.inn.forEach((inn,i)=>{ const str=cs[i].runs+'/'+cs[i].wk+' ('+ovS(cs[i].legal)+')'; if(inn.bat===m.a) m.sa=str; else m.sb=str; });
+}
+function calcResult(m){
+  const inn=m.sc.inn; if(inn.length<2) return null; const cs=inn.map(calcInn); if(!inningsDone(m,1,cs)) return null;
+  const t0=T(inn[0].bat), t1=T(inn[1].bat);
+  if(cs[1].runs>cs[0].runs){ const w=Math.max(WK()-cs[1].wk,0); return {w:inn[1].bat,text:`${t1.name} won by ${w} wicket${w===1?'':'s'}`}; }
+  if(cs[1].runs<cs[0].runs){ const d=cs[0].runs-cs[1].runs; return {w:inn[0].bat,text:`${t0.name} won by ${d} run${d===1?'':'s'}`}; }
+  return {w:null,tie:true,text:'Match tied – decide by super over'};
+}
+/* ---- scorer (admin) ---- */
+function openScorer(mid){ if(!isAdmin) return; SC={mid,ex:'',w:false}; renderScorer(); }
+function startScoring(){
+  const bat=$('#scBat').value; const ov=Math.max(1,Math.min(20,parseInt($('#scOv').value)||6));
+  mutate(s=>{ const m=s.matches.find(x=>x.id===SC.mid); const bowl=bat===m.a?m.b:m.a; m.sc={overs:ov,inn:[{bat,bowl,balls:[],cur:{s:'',ns:'',b:''}}]}; }).then(renderScorer);
+}
+function setCur(k,v){ mutate(s=>{ const m=s.matches.find(x=>x.id===SC.mid); lastInn(m).cur[k]=v; }).then(renderScorer); }
+function setEx(v){ SC.ex=v; renderScorer(); }
+function pushBall(ball){
+  mutate(s=>{ const m=s.matches.find(x=>x.id===SC.mid); const inn=lastInn(m); inn.balls=inn.balls||[]; inn.balls.push(ball); const o=calcInn(inn); inn.cur=nextCur(ball,o.legal); syncScores(m); }).then(renderScorer);
+}
+function canBall(){
+  const m=getM(); const n=m.sc.inn.length-1, c=lastInn(m).cur||{};
+  if(!c.s||!c.ns||!c.b){ toast('Select striker, non-striker and bowler'); return null; }
+  if(c.s===c.ns){ toast('Striker and non-striker must be different'); return null; }
+  if(inningsDone(m,n,m.sc.inn.map(calcInn))){ toast('Innings is over'); return null; }
+  return c;
+}
+function addBall(r){ const c=canBall(); if(!c) return; const ex=SC.ex; SC.ex=''; SC.w=false; pushBall({r,ex,s:c.s,ns:c.ns,b:c.b,w:false}); }
+function confirmWicket(){
+  const c=canBall(); if(!c) return; const wt=$('#wType').value, runs=parseInt($('#wRuns').value)||0;
+  const out=(wt==='run out'&&$('#wOut').value==='ns')?c.ns:c.s; const ex=SC.ex; SC.ex=''; SC.w=false;
+  pushBall({r:runs,ex,s:c.s,ns:c.ns,b:c.b,w:true,wt,out});
+}
+function undoBall(){
+  mutate(s=>{ const m=s.matches.find(x=>x.id===SC.mid); const inn=lastInn(m); const b=(inn.balls||[]).pop(); if(b){ inn.cur={s:b.s,ns:b.ns,b:b.b}; inn.ended=false; } else if(m.sc.inn.length>1){ m.sc.inn.pop(); } syncScores(m); }).then(renderScorer);
+}
+function endInnings(){ if(!confirm('End this innings now?')) return; mutate(s=>{ lastInn(s.matches.find(x=>x.id===SC.mid)).ended=true; }).then(renderScorer); }
+function startSecond(){ mutate(s=>{ const m=s.matches.find(x=>x.id===SC.mid); const f=m.sc.inn[0]; m.sc.inn.push({bat:f.bowl,bowl:f.bat,balls:[],cur:{s:'',ns:'',b:''}}); }).then(renderScorer); }
+function finishMatch(wid){
+  mutate(s=>{ const m=s.matches.find(x=>x.id===SC.mid); const r=calcResult(m); m.winner=wid; m.sc.result=(r&&!r.tie)?r.text:`${s.teams.find(t=>t.id===wid).name} won (super over)`; syncScores(m); }).then(()=>{ closeModal(); toast('✅ Result saved – winner advanced in fixtures'); });
+}
+function renderScorer(){
+  const m=getM(); if(!m) return closeModal();
+  const A=T(m.a), B=T(m.b);
+  if(!m.sc||!(m.sc.inn||[]).length){
+    openModal(`<h2>🏏 Start Scoring – Match ${m.no}</h2><div class="note">${esc(A.name)} vs ${esc(B.name)}</div>
+    <label>Batting first (toss result)</label><select id="scBat"><option value="${m.a}">${esc(A.name)}</option><option value="${m.b}">${esc(B.name)}</option></select>
+    <label>Overs per innings</label><input id="scOv" type="number" min="1" max="20" value="${CONFIG.DEFAULT_OVERS||6}">
+    <div class="center" style="margin-top:14px"><button class="btn gold" onclick="startScoring()">▶ Start Match</button></div>`,true); return;
+  }
+  const n=m.sc.inn.length-1, inn=m.sc.inn[n], cs=m.sc.inn.map(calcInn), o=cs[n], done=inningsDone(m,n,cs);
+  const bt=T(inn.bat), bw=T(inn.bowl), c=inn.cur||{s:'',ns:'',b:''};
+  const outs=Object.values(o.bat).filter(x=>x.out).map(x=>x.n);
+  const cnt={}; o.overs.forEach(v=>{ cnt[v.b]=(cnt[v.b]||0)+1; });
+  const midOver=o.legal%6!==0;
+  const bdis=p=>{ if(m.sc.overs!==6||(midOver&&c.b===p)) return false; const k=cnt[p]||0; if(k>=2) return true; return k===1&&Object.entries(cnt).some(([q,v])=>q!==p&&v>=2); };
+  const sel=(key,list,val,dis)=>`<select onchange="setCur('${key}',this.value)"><option value="">— select —</option>${list.map(p=>`<option ${p===val?'selected':''} ${dis(p)?'disabled':''}>${esc(p)}</option>`).join('')}</select>`;
+  const target=n===1?cs[0].runs+1:null;
+  const chase=target?(o.runs>=target?'Target achieved':`Need ${target-o.runs} off ${m.sc.overs*6-o.legal} balls`):'';
+  let next='';
+  if(done&&n===0) next=`<div class="champ" style="padding:14px"><b>Innings 1 complete: ${o.runs}/${o.wk} – Target ${o.runs+1}</b><div style="margin-top:10px"><button class="btn gold" onclick="startSecond()">▶ Start 2nd innings</button></div></div>`;
+  const res=(done&&n===1)?calcResult(m):null;
+  if(res) next=`<div class="champ" style="padding:14px"><b>🏆 ${esc(res.text)}</b>${m.winner?`<div class="note">Saved: ${esc(m.sc.result||'')}</div>`:''}<div class="acts" style="justify-content:center;margin-top:10px">${res.tie?`<button class="btn gold" onclick="finishMatch('${m.a}')">${esc(A.name)} won</button><button class="btn gold" onclick="finishMatch('${m.b}')">${esc(B.name)} won</button>`:`<button class="btn gold" onclick="finishMatch('${res.w}')">✅ Save result &amp; advance winner</button>`}</div></div>`;
+  let wp='';
+  if(SC.w){ const types=(o.free||SC.ex==='nb')?['run out']:SC.ex==='wd'?['stumped','run out','hit wicket']:['bowled','caught','stumped','run out','hit wicket'];
+    wp=`<div class="card" style="margin:10px 0;border-color:#e5192d"><b>🔴 Wicket</b><div class="two"><div><label>Type</label><select id="wType">${types.map(t=>`<option>${t}</option>`).join('')}</select></div><div><label>Batter out (run out only)</label><select id="wOut"><option value="s">${esc(c.s)} (striker)</option><option value="ns">${esc(c.ns)} (non-striker)</option></select></div></div><label>Runs completed on this ball</label><input id="wRuns" type="number" min="0" value="0"><div class="acts" style="margin-top:10px"><button class="btn red" onclick="confirmWicket()">Confirm wicket</button><button class="btn ghost" onclick="SC.w=false;renderScorer()">Cancel</button></div></div>`; }
+  const lastOv=o.overs[o.overs.length-1];
+  const modes=[['','Normal'],['wd','Wide'],['nb','No-ball'],['b','Bye']];
+  openModal(`<h2>🏏 Scoring – Match ${m.no}</h2>
+  <div class="note">${esc(bt.name)} batting • ${esc(bw.name)} bowling • ${m.sc.overs} overs • Innings ${n+1}</div>
+  <div class="center" style="margin:10px 0"><div class="bigscore">${o.runs}/${o.wk}</div><div>${ovS(o.legal)} / ${m.sc.overs} ov ${chase?' • <b>'+chase+'</b>':''}</div>${(o.free&&!done)?'<span class="badge b-warn" style="margin-top:6px">🎯 FREE HIT – only run out allowed</span>':''}</div>
+  <div class="sel3"><div><label>Striker 🏏</label>${sel('s',plist(inn.bat),c.s,p=>outs.includes(p)||p===c.ns)}</div><div><label>Non-striker</label>${sel('ns',plist(inn.bat),c.ns,p=>outs.includes(p)||p===c.s)}</div><div><label>Bowler ⚾ ${m.sc.overs===6?'(2+1+1+1+1)':''}</label>${sel('b',plist(inn.bowl),c.b,bdis)}</div></div>
+  <label>Next ball type</label><div class="acts">${modes.map(([k,l])=>`<button class="btn sm ${SC.ex===k?'':'ghost'}" onclick="setEx('${k}')">${l}</button>`).join('')}</div>
+  <div class="note">${SC.ex==='wd'?'Wide: 1 extra + runs run. Ball is re-bowled.':SC.ex==='nb'?'No-ball: 1 extra + runs off the bat. Next ball is a free hit.':SC.ex==='b'?'Bye: runs are extras, not credited to batter.':'Runs off the bat. Leg byes are not allowed.'}</div>
+  <div class="runs">${[0,1,2,3,4,5,6].map(r=>`<button ${done?'disabled':''} onclick="addBall(${r})">${r}</button>`).join('')}</div>
+  <div class="acts"><button class="btn red sm" ${done?'disabled':''} onclick="SC.w=true;renderScorer()">🔴 WICKET</button><button class="btn ghost sm" onclick="undoBall()">↩️ Undo last ball</button>${done?'':`<button class="btn ghost sm" onclick="endInnings()">⏹ End innings</button>`}<button class="btn ghost sm" onclick="scorecardPDF('${m.id}')">📄 PDF</button></div>
+  ${wp}
+  ${lastOv?`<div style="margin-top:12px"><b class="note">${midOver?'This over':'Last over'} (${esc(lastOv.b)}):</b><br>${lastOv.balls.map(b=>`<span class="bchip ${b.c}">${b.t}</span>`).join('')}</div>`:''}
+  ${next}
+  <div style="margin-top:14px">${scorecardHTML(m)}</div>`,true);
+}
+/* ---- scorecard view ---- */
+function openScorecard(mid){
+  const m=S.matches.find(x=>x.id===mid); if(!m) return; SC.mid=mid; const a=T(m.a), b=T(m.b);
+  openModal(`<h2>📊 Scorecard</h2><div class="note">${esc(a.name)} vs ${esc(b.name)}</div>${scorecardHTML(m)}<div class="acts" style="margin-top:12px"><button class="btn gold sm" onclick="scorecardPDF('${mid}')">📄 Download PDF</button>${isAdmin?`<button class="btn sm" onclick="openScorer('${mid}')">🏏 Continue scoring</button>`:''}</div>`,true);
+}
+function scorecardHTML(m){
+  const sc=m.sc; if(!sc||!(sc.inn||[]).length) return '<div class="empty">Scoring has not started.</div>';
+  const cs=sc.inn.map(calcInn); const res=calcResult(m);
+  let h=`<div class="center note">Match ${m.no} • ${sc.overs} overs a side</div>`;
+  const rt=sc.result||(res&&res.text); if(rt) h+=`<div class="champ" style="padding:12px;margin:10px 0"><b>🏆 ${esc(rt)}</b></div>`;
+  sc.inn.forEach((inn,i)=>{
+    const o=cs[i], bt=T(inn.bat), dn=inningsDone(m,i,cs), c=inn.cur||{};
+    const names=plist(inn.bat); const faced=o.batOrder.concat(names.filter(x=>!o.bat[x]&&false));
+    const dnb=names.filter(x=>!o.bat[x]);
+    h+=`<div class="card" style="margin:12px 0;padding:14px"><div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px"><h3 style="color:var(--gold);font-size:1rem">${esc(bt.name)} – Innings ${i+1}</h3><b style="font-size:1.3rem">${o.runs}/${o.wk} <span class="note">(${ovS(o.legal)} ov)</span></b></div>
+    <div class="tw" style="margin-top:8px"><table class="sct"><tr><th>Batter</th><th>Dismissal</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th></tr>${faced.map(nm=>{ const b=o.bat[nm]; const st=b.out||(!dn&&(nm===c.s||nm===c.ns)?'batting':'not out'); return `<tr><td><b>${esc(nm)}</b></td><td>${esc(st)}</td><td><b>${b.r}</b></td><td>${b.b}</td><td>${b.f}</td><td>${b.s}</td><td>${b.b?(b.r*100/b.b).toFixed(0):'-'}</td></tr>`; }).join('')||'<tr><td colspan=7 class="note">Yet to start</td></tr>'}</table></div>
+    <div class="note" style="margin:6px 0">Extras: <b>${o.ext.wd+o.ext.nb+o.ext.b}</b> (wd ${o.ext.wd}, nb ${o.ext.nb}, b ${o.ext.b})${dnb.length?` • Did not bat: ${dnb.map(esc).join(', ')}`:''}</div>
+    <div class="tw"><table class="sct"><tr><th>Bowler</th><th>O</th><th>R</th><th>W</th><th>Wd</th><th>Nb</th><th>Econ</th></tr>${o.bowlOrder.map(nm=>{ const b=o.bowl[nm]; return `<tr><td><b>${esc(nm)}</b></td><td>${ovS(b.legal)}</td><td>${b.r}</td><td><b>${b.w}</b></td><td>${b.wd}</td><td>${b.nb}</td><td>${b.legal?(b.r/(b.legal/6)).toFixed(1):'-'}</td></tr>`; }).join('')||'<tr><td colspan=7 class="note">–</td></tr>'}</table></div>
+    ${o.fow.length?`<div class="note" style="margin-top:6px"><b>Fall of wickets:</b> ${o.fow.map(esc).join(' • ')}</div>`:''}
+    <div style="margin-top:8px">${o.overs.map((ov,k)=>`<div style="margin:4px 0;font-size:.8rem"><b>Over ${k+1}</b> <span class="note">(${esc(ov.b)})</span> ${ov.balls.map(b=>`<span class="bchip ${b.c}">${b.t}</span>`).join('')} = <b>${ov.runs}</b></div>`).join('')}</div></div>`;
+  });
+  return h;
+}
+function scorecardPDF(mid){
+  const m=S.matches.find(x=>x.id===mid); if(!m||!m.sc) return; if(!window.jspdf) return toast('PDF library not loaded – check internet');
+  const {jsPDF}=window.jspdf; const d=new jsPDF({unit:'mm',format:'a4'}); const W=210; let y=26;
+  const hdr=()=>{ d.setFillColor(11,107,48); d.rect(0,0,W,16,'F'); d.setTextColor(255,255,255); d.setFont('helvetica','bold'); d.setFontSize(13); d.text('GOAL & GOOGLY TURF - MATCH SCORECARD',W/2,10,{align:'center'}); };
+  hdr();
+  const chk=()=>{ if(y>280){ d.addPage(); hdr(); y=26; } };
+  const line=(t,b,sz,col)=>{ chk(); d.setFont('helvetica',b?'bold':'normal'); d.setFontSize(sz||10); d.setTextColor(...(col||[20,20,20])); d.text(String(t),15,y,{maxWidth:180}); y+=(sz||10)*0.42+2.2; };
+  const row=(cells,xs,b)=>{ chk(); d.setFont('helvetica',b?'bold':'normal'); d.setFontSize(9); d.setTextColor(20,20,20); cells.forEach((c,i)=>d.text(String(c).slice(0,i===1?30:24),xs[i],y)); y+=5.2; };
+  const cs=m.sc.inn.map(calcInn); const a=T(m.a), b=T(m.b);
+  line(`Match ${m.no}: ${a.name} vs ${b.name}  (${m.sc.overs} overs a side)`,true,12); 
+  const rt=m.sc.result||(calcResult(m)||{}).text; if(rt) line('Result: '+rt,true,11,[11,107,48]); y+=2;
+  m.sc.inn.forEach((inn,i)=>{ const o=cs[i], bt=T(inn.bat);
+    line(`${bt.name} - Innings ${i+1}: ${o.runs}/${o.wk} (${ovS(o.legal)} ov)`,true,11,[11,107,48]);
+    row(['Batter','Dismissal','R','B','4s','6s','SR'],[15,62,112,124,136,148,160],true);
+    o.batOrder.forEach(nm=>{ const x=o.bat[nm]; row([nm,x.out||'not out',x.r,x.b,x.f,x.s,x.b?(x.r*100/x.b).toFixed(0):'-'],[15,62,112,124,136,148,160]); });
+    line(`Extras: ${o.ext.wd+o.ext.nb+o.ext.b} (wd ${o.ext.wd}, nb ${o.ext.nb}, b ${o.ext.b})`,false,9); y+=1;
+    row(['Bowler','O','R','W','Wd','Nb','Econ'],[15,62,76,88,100,112,124],true);
+    o.bowlOrder.forEach(nm=>{ const x=o.bowl[nm]; row([nm,ovS(x.legal),x.r,x.w,x.wd,x.nb,x.legal?(x.r/(x.legal/6)).toFixed(1):'-'],[15,62,76,88,100,112,124]); });
+    if(o.fow.length) line('Fall of wickets: '+o.fow.join(' | '),false,8.5);
+    y+=5; });
+  d.save(`Scorecard-Match-${m.no}.pdf`);
+}
 
 /* ---------- Excel ---------- */
 function exportExcel(){
