@@ -412,7 +412,8 @@ function regNext(){
   <div style="font-weight:700">${esc(CONFIG.PAYEE)}</div>
   <div class="upi">UPI ID: <span id="upiTxt">${CONFIG.UPI_ID}</span> <button class="btn ghost sm" onclick="copyText('${CONFIG.UPI_ID}')">📋 Copy</button></div>
   <div class="note">Scan to pay with any UPI app • Amount: <b>${fmt(CONFIG.ENTRY_FEE)}</b></div>
-  <a class="btn ghost sm" style="margin-top:8px" href="${link}">📱 Open UPI app (mobile)</a></div>
+  <a class="btn ghost sm" style="margin-top:8px" href="${link}">📱 Open UPI app (mobile)</a>
+  <div class="card" style="margin:14px auto 0;max-width:420px;text-align:left;border-color:var(--gold);padding:14px"><b style="color:var(--gold)">⚠️ Disclaimer</b><div class="note" style="margin-top:4px;color:var(--tx)">If the <b>Open UPI app</b> button does not work, take a <b>screenshot of this QR code</b>, open <b>PhonePe / Google Pay / Paytm</b> or any payment app, choose <b>Scan QR → Upload from gallery</b>, select the screenshot and proceed to pay ${fmt(CONFIG.ENTRY_FEE)}.</div></div></div>
   <label>Last 4 digits of Transaction ID / UTR *</label><input id="rTxn" maxlength="4" placeholder="e.g. 4821" style="font-size:1.3rem;letter-spacing:6px;text-align:center">
   <label style="display:flex;gap:8px;align-items:center;font-weight:500;margin-top:14px"><input type="checkbox" id="rPaid" style="width:auto"> I have paid ${fmt(CONFIG.ENTRY_FEE)} and the details are correct</label>
   <div class="err" id="rErr"></div>
