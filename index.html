@@ -474,10 +474,28 @@ function downloadPDF(id){
   t.players.forEach((p,i)=>{ d.text((i+1)+'. '+p+(i===0?'  (Captain)':''),24,y); y+=7; }); y+=6;
   d.setFont('helvetica','bold'); d.setFontSize(13); d.text('Prizes',20,y); y+=7; d.setFont('helvetica','normal'); d.setFontSize(11);
   ['1st Prize: Rs. 15,000 + Trophy','2nd Prize: Rs. 10,000 + Trophy','3rd Prize: Trophy'].forEach(l=>{d.text(l,24,y); y+=6.5;}); y+=5;
-  d.setFont('helvetica','bold'); d.setFontSize(13); d.text('Important',20,y); y+=7; d.setFont('helvetica','normal'); d.setFontSize(10.5);
-  ['Report to the venue 15 minutes before your scheduled match time.','6 overs per side; bowling quota 2+1+1+1+1.','Umpire\'s decision is final. Play hard, play fair!'].forEach(l=>{d.text('- '+l,24,y); y+=6;});
-  y+=6; d.setFontSize(10); d.setTextColor(90,90,90); d.text('Venue: '+CONFIG.VENUE,20,y,{maxWidth:170}); y+=12; d.text('Contact: '+CONFIG.CONTACTS,20,y);
-  d.setFillColor(11,107,48); d.rect(0,285,W,12,'F'); d.setTextColor(255,255,255); d.setFontSize(10); d.text('PLAY HARD. TRAIN SMART. WIN TOGETHER.',W/2,292,{align:'center'});
+  y+=3; d.setFont('helvetica','normal'); d.setFontSize(10); d.setTextColor(90,90,90); d.text('Venue: '+CONFIG.VENUE,20,y,{maxWidth:170}); y+=11; d.text('Contact: '+CONFIG.CONTACTS,20,y); y+=7;
+  d.setFont('helvetica','bold'); d.setTextColor(11,107,48); d.text('Please read the complete Rules & Regulations on the next page.',20,y);
+  /* ---- Rules & Regulations pages ---- */
+  const RULES=[
+   ['1. Tournament Basics',['Entry Fee: Rs. 1,500 per team.','Team Squad: 8 members per team.','Fielding: All 8 players are allowed to play and field.']],
+   ['2. Match Format & Time Constraints',['Innings: 6 overs per side.','Bowling Quota (2+1+1+1+1): One bowler can bowl a maximum of 2 overs, while four other bowlers must bowl 1 over each.','Strict Time Limit: Teams must complete their overs within the allotted time.','Overs Reduction: If time is limited or the match exceeds the allotted time, the number of overs may be reduced by the organizers to ensure the tournament runs on schedule.','Teams are expected to cooperate with the umpires and organizers to avoid unnecessary delays.']],
+   ['3. Standard Turf Rules',["Umpire's Decision: The umpire's decision is final and binding. No arguments or disputes will be entertained.",'Wides & No-Balls: Each wide and no-ball will count as 1 extra run and an extra delivery.','Free Hit: A front-foot no-ball will result in a free hit. Any full toss above waist height will be called a No-Ball and will result in a Free Hit on the next delivery.','LBW: LBW dismissals are not applicable.','Byes & Overthrows: Runs from byes and overthrows are allowed. Leg byes are not allowed.','Throwing & Chucking: Throwing or chucking the ball will be allowed to avoid unnecessary conflicts and disputes during the match.','Scoring Zones: Runs will be awarded according to the designated turf scoring zones and net markers. Hitting the straight net with a bounce may count as 4 or 6, depending on the turf markers.']],
+   ['4. Reporting Time & Punctuality',['All teams must report to the venue 15 minutes before their scheduled match time.',"Late arrivals may result in forfeiture of the toss or the match, at the organizers' discretion."]],
+   ['5. Fair Play & Sportsmanship',['Respect the umpires, organizers, opponents, and fellow players.','Avoid unnecessary arguments and disputes.','Maintain a friendly and sporting atmosphere throughout the tournament.','The organizers reserve the right to make necessary decisions to ensure the smooth and timely completion of the tournament.','Player Registration Rule: Once a player has played for one team in the tournament, they cannot play for any other team in the same tournament.']]
+  ];
+  const rulesHeader=()=>{ d.setFillColor(11,107,48); d.rect(0,0,W,24,'F'); d.setFillColor(255,198,26); d.rect(0,24,W,2,'F'); d.setTextColor(255,255,255); d.setFont('helvetica','bold'); d.setFontSize(15); d.text('6-OVER TURF CRICKET LEAGUE - RULES & REGULATIONS',W/2,15,{align:'center'}); };
+  d.addPage(); rulesHeader(); y=36;
+  RULES.forEach(([h,items])=>{
+    if(y>250){ d.addPage(); rulesHeader(); y=36; }
+    d.setFont('helvetica','bold'); d.setFontSize(12.5); d.setTextColor(11,107,48); d.text(h,20,y); y+=7;
+    d.setFont('helvetica','normal'); d.setFontSize(10.5); d.setTextColor(30,30,30);
+    items.forEach(it=>{ const lines=d.splitTextToSize(it,165); if(y+lines.length*5.2>278){ d.addPage(); rulesHeader(); y=36; d.setFont('helvetica','normal'); d.setFontSize(10.5); d.setTextColor(30,30,30); } d.text('-',22,y); d.text(lines,28,y); y+=lines.length*5.2+2; });
+    y+=4;
+  });
+  if(y>268){ d.addPage(); rulesHeader(); y=36; }
+  d.setFont('helvetica','bold'); d.setFontSize(12); d.setTextColor(200,30,40); d.text('Play hard, play fair, and enjoy the game!',W/2,y+4,{align:'center'});
+  const pages=d.getNumberOfPages(); for(let i=1;i<=pages;i++){ d.setPage(i); d.setFillColor(11,107,48); d.rect(0,285,W,12,'F'); d.setTextColor(255,255,255); d.setFont('helvetica','bold'); d.setFontSize(10); d.text('PLAY HARD. TRAIN SMART. WIN TOGETHER.   |   Page '+i+' of '+pages,W/2,292,{align:'center'}); }
   d.save('Registration-'+t.regId+'.pdf');
 }
 
